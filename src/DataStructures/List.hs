@@ -1,6 +1,6 @@
-module List
+module DataStructures.List
 (
-    List,
+    List(..),
     tailPart,
     setHead,
     remove,
