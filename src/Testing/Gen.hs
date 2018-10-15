@@ -5,6 +5,8 @@ module Testing.Gen
 
 import Control.Monad.State
 import System.Random
+import Data.List
+import Data.Maybe
 
 -- newtype Gen a = Gen { getSample :: State StdGen a }
 type Gen a = State StdGen a
@@ -45,3 +47,34 @@ weighted (g1, w1) (g2, w2) = do
     if g1Ratio > d
         then g1
         else g2
+
+
+type FailedCase = String
+type SuccessCount = Int
+type TestCases = Int
+
+data Result = Passed | Falsified FailedCase SuccessCount
+isFulsified :: Result -> Bool
+isFulsified Passed = False
+isFulsified (Falsified _ _) = True 
+
+newtype Prop = Prop { run :: (TestCases, StdGen) -> Result}
+
+forAll :: (Show a) => Gen a -> (a -> Bool) -> Prop
+forAll g f = Prop (\ (n, rng) ->
+    let rs = randomStream g rng
+        zipS = zip rs [0..]
+        mapped = map (\ (r, i) -> if f r then Passed else Falsified (show r) i) zipS
+        failCase = find isFulsified mapped
+    in fromMaybe Passed failCase)
+
+
+rsFoldOp :: Gen a -> ([a], StdGen) -> ([a], StdGen)
+rsFoldOp g (xs, rng) = 
+    let (x, newRng) = runState g rng 
+    in (x:xs, newRng)
+
+randomStream :: Gen a -> StdGen -> [a]
+randomStream g rng = fst $ foldr rsFoldOp ([], rng) (repeat g) 
+
+
