@@ -1,6 +1,5 @@
 module Testing.Gen
 (
-
 ) where
 
 import Control.Monad.State
@@ -8,7 +7,6 @@ import System.Random
 import Data.List
 import Data.Maybe
 
--- newtype Gen a = Gen { getSample :: State StdGen a }
 type Gen a = State StdGen a
 
 choose :: Int -> Int -> Gen Int
@@ -53,7 +51,8 @@ type FailedCase = String
 type SuccessCount = Int
 type TestCases = Int
 
-data Result = Passed | Falsified FailedCase SuccessCount
+data Result = Passed | Falsified FailedCase SuccessCount deriving (Show)
+
 isFulsified :: Result -> Bool
 isFulsified Passed = False
 isFulsified (Falsified _ _) = True 
@@ -63,18 +62,18 @@ newtype Prop = Prop { run :: (TestCases, StdGen) -> Result}
 forAll :: (Show a) => Gen a -> (a -> Bool) -> Prop
 forAll g f = Prop (\ (n, rng) ->
     let rs = randomStream g rng
-        zipS = zip rs [0..]
+        zipS = zip rs [0..n]
         mapped = map (\ (r, i) -> if f r then Passed else Falsified (show r) i) zipS
         failCase = find isFulsified mapped
     in fromMaybe Passed failCase)
 
 
-rsFoldOp :: Gen a -> ([a], StdGen) -> ([a], StdGen)
-rsFoldOp g (xs, rng) = 
-    let (x, newRng) = runState g rng 
-    in (x:xs, newRng)
-
 randomStream :: Gen a -> StdGen -> [a]
-randomStream g rng = fst $ foldr rsFoldOp ([], rng) (repeat g) 
+randomStream g = unfoldr $ Just . runState g
 
 
+(<&&>) :: Prop -> Prop -> Prop
+p1 <&&> p2 = Prop (\ (casesNum, rng) -> 
+    case run p1 (casesNum, rng) of 
+        Passed -> run p2 (casesNum, rng) 
+        failCase -> failCase)
