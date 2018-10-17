@@ -1,6 +1,4 @@
-module Testing.Gen
-(
-) where
+module Testing.Gen where
 
 import Control.Monad.State
 import System.Random
@@ -57,10 +55,11 @@ isFulsified :: Result -> Bool
 isFulsified Passed = False
 isFulsified (Falsified _ _) = True 
 
-newtype Prop = Prop { run :: (TestCases, StdGen) -> Result}
+type MaxSize = Int
+newtype Prop = Prop { run :: (MaxSize, TestCases, StdGen) -> Result}
 
 forAll :: (Show a) => Gen a -> (a -> Bool) -> Prop
-forAll g f = Prop (\ (n, rng) ->
+forAll g f = Prop (\ (max, n, rng) ->
     let rs = randomStream g rng
         zipS = zip rs [0..n]
         mapped = map (\ (r, i) -> if f r then Passed else Falsified (show r) i) zipS
@@ -73,7 +72,33 @@ randomStream g = unfoldr $ Just . runState g
 
 
 (<&&>) :: Prop -> Prop -> Prop
-p1 <&&> p2 = Prop (\ (casesNum, rng) -> 
-    case run p1 (casesNum, rng) of 
-        Passed -> run p2 (casesNum, rng) 
+p1 <&&> p2 = Prop (\ (max, casesNum, rng) -> 
+    case run p1 (max, casesNum, rng) of 
+        Passed -> run p2 (max, casesNum, rng) 
         failCase -> failCase)
+
+(<||>) :: Prop -> Prop -> Prop
+p1 <||> p2 = Prop (\ (max, casesNum, rng) ->
+    case run p1 (max, casesNum, rng) of
+        Passed -> Passed
+        _ -> run p2 (max, casesNum, rng))
+
+
+
+type SGen a = Int -> Gen a
+
+unsized :: Gen a -> SGen a
+unsized g _ = g
+
+listOfSGen :: Gen a -> SGen [a]
+listOfSGen g n = listOfN n g
+
+forAllGrowing :: (Show a) => SGen a -> (a -> Bool) -> Prop
+forAllGrowing sg f = Prop (\ (max, n, rng) -> 
+    let casesPerSize = (n + (max -1)) `div` max
+        smallNum = min max n
+        props =  map (\ i -> forAll (sg i) f) . take smallNum $ [0..]
+        mapF p = Prop (\ (max, _, rng) -> run p (max, casesPerSize, rng))
+        prop = foldl1 (<&&>) . map mapF $ props
+    in run prop (max, n, rng))
+
