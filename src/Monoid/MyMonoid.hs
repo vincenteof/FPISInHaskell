@@ -47,8 +47,8 @@ instance MyMonoid (EndoFunc a) where
   EndoFunc f `op` EndoFunc g = EndoFunc (f . g)
   zero = EndoFunc id
 
-monoidLaws :: (Show a, Eq a, MyMonoid a) => a -> Gen a -> Prop
-monoidLaws m gen =
+monoidLaws :: (Show a, Eq a, MyMonoid a) => Gen a -> Prop
+monoidLaws gen =
   let threeMGen =
         gen `flatMap` (\x -> gen `flatMap` (\y -> gen `flatMap` (\z -> unit (x, y, z))))
       associativity = 
@@ -56,3 +56,22 @@ monoidLaws m gen =
       identity = 
         forAll gen (\x -> x `op` zero == zero `op` x)
   in associativity <&&> identity
+
+
+concatenate :: (MyMonoid a) => [a] -> a -> a
+concatenate xs z = foldl op z xs
+
+foldMapWith :: (MyMonoid b) => [a] -> (a -> b) -> b
+foldMapWith xs f = flip concatenate zero . map f $ xs
+
+-- the type of `f` is `a -> (b -> b)`, and it will map a value with type `a` to a monoid 
+foldrViaFoldMap :: (MyMonoid a) => (a -> b -> b) -> b -> [a] -> b
+foldrViaFoldMap f z xs = getFunc (foldMapWith xs (EndoFunc . f)) z
+
+newtype EndoFuncFlip a = EndoFuncFlip { getFunc' :: a -> a }
+instance MyMonoid (EndoFuncFlip a) where
+  EndoFuncFlip f `op` EndoFuncFlip g = EndoFuncFlip $ g . f
+  zero = EndoFuncFlip id
+
+foldlViaFoldMap :: (MyMonoid a) => (b -> a -> b) -> b -> [a] -> b
+foldlViaFoldMap f z xs = getFunc' (foldMapWith xs (EndoFuncFlip . flip f)) z

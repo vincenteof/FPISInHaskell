@@ -66,9 +66,7 @@ isFulsified (Falsified _ _) = True
 
 type MaxSize = Int
 
-newtype Prop = Prop
-  { run :: (MaxSize, TestCases, StdGen) -> Result
-  }
+newtype Prop = Prop{ run :: (MaxSize, TestCases, StdGen) -> Result }
 
 forAll :: (Show a) => Gen a -> (a -> Bool) -> Prop
 forAll g f =
