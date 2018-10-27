@@ -3,6 +3,7 @@
 module Monoid.MyMonoid where
 
 import Testing.Gen
+import Data.List
 
 class MyMonoid m where
   op :: m -> m -> m
@@ -75,3 +76,51 @@ instance MyMonoid (EndoFuncFlip a) where
 
 foldlViaFoldMap :: (MyMonoid a) => (b -> a -> b) -> b -> [a] -> b
 foldlViaFoldMap f z xs = getFunc' (foldMapWith xs (EndoFuncFlip . flip f)) z
+
+foldMapV :: (MyMonoid b) => [a] -> (a -> b) -> b
+foldMapV [] _ = zero
+foldMapV [x] f = f x
+foldMapV xs f = 
+  let halfLen = length xs `div` 2
+      (left, right) = splitAt halfLen xs
+  in foldMapV left f `op` foldMapV right f
+
+-- sorted :: [Int] -> Bool
+
+data WC = Stub String | Part String Int String
+-- instance MyMonoid WC where
+--   Stub x `op` Stub y = 
+--     let pred x y = (x == y && x == ' ') || (x /= ' ' && y /= ' ')
+--         words = groupBy pred (x++y)
+--         blankCount = length . filter (\s -> head s /= ' ') $ words
+--     in 
+--       if blankCount > 1
+--         then Part (head words) (blankCount - 1) (last words)
+--       else
+--         Stub (x++y)
+--   Part lx n ly `op` Part rx m ry = Part lx (n+m+1) ry
+--   Stub s `op` Part l n r = Stub s `op` Stub l `op` Part "" n r
+--   Part l n r `op` Stub s = Part l n "" `op` (Stub r `op` Stub s)
+--   zero = Stub ""
+instance MyMonoid WC where
+  Stub x `op` Stub y = Stub (x++y)
+  Stub s `op` Part l n r = Part (s++l) n r
+  Part l n r `op` Stub s = Part l n (r++s)
+  Part lx n ly `op` Part rx m ry = 
+    let plusCount = if null (ly++rx) then 0 else 1
+    in Part lx (n + plusCount + m) ry
+  zero = Stub ""
+
+wc :: Char -> WC 
+wc c 
+  | c == ' ' = Part "" 0 ""
+  | otherwise = Stub [c]
+
+unstub :: String -> Int
+unstub s =  min (length s) 1
+
+countForWords :: String -> Int
+countForWords s = 
+  case foldMapV s wc of
+    Stub s -> unstub s
+    Part l n r -> unstub l + n + unstub r
