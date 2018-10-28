@@ -66,7 +66,7 @@ foldMapWith :: (MyMonoid b) => [a] -> (a -> b) -> b
 foldMapWith xs f = flip concatenate zero . map f $ xs
 
 -- the type of `f` is `a -> (b -> b)`, and it will map a value with type `a` to a monoid 
-foldrViaFoldMap :: (MyMonoid a) => (a -> b -> b) -> b -> [a] -> b
+foldrViaFoldMap :: (a -> b -> b) -> b -> [a] -> b
 foldrViaFoldMap f z xs = getFunc (foldMapWith xs (EndoFunc . f)) z
 
 newtype EndoFuncFlip a = EndoFuncFlip { getFunc' :: a -> a }
@@ -74,7 +74,7 @@ instance MyMonoid (EndoFuncFlip a) where
   EndoFuncFlip f `op` EndoFuncFlip g = EndoFuncFlip $ g . f
   zero = EndoFuncFlip id
 
-foldlViaFoldMap :: (MyMonoid a) => (b -> a -> b) -> b -> [a] -> b
+foldlViaFoldMap :: (b -> a -> b) -> b -> [a] -> b
 foldlViaFoldMap f z xs = getFunc' (foldMapWith xs (EndoFuncFlip . flip f)) z
 
 foldMapV :: (MyMonoid b) => [a] -> (a -> b) -> b
@@ -85,7 +85,20 @@ foldMapV xs f =
       (left, right) = splitAt halfLen xs
   in foldMapV left f `op` foldMapV right f
 
--- sorted :: [Int] -> Bool
+-- range stands for (min, max, sorted)
+newtype SomeRange = SomeRange { getRange :: Maybe (Int, Int, Bool) }
+instance MyMonoid SomeRange where
+  SomeRange (Just (minL, maxL, sortedL)) `op` SomeRange (Just (minR, maxR, sortedR)) =
+    SomeRange . Just $ (min minL minR, max maxL maxR, sortedL && sortedR && maxL <= minR)
+  SomeRange (Just range) `op` SomeRange Nothing = SomeRange (Just range)
+  SomeRange Nothing `op`  SomeRange (Just range) =  SomeRange (Just range)
+  zero = SomeRange Nothing
+
+sorted :: [Int] -> Bool
+sorted xs = 
+  case getRange . foldMapV xs $ (\a -> SomeRange (Just (a, a, True))) of
+    Just (_, _, sorted) -> sorted
+    Nothing -> False
 
 data WC = Stub String | Part String Int String
 -- instance MyMonoid WC where
@@ -124,3 +137,27 @@ countForWords s =
   case foldMapV s wc of
     Stub s -> unstub s
     Part l n r -> unstub l + n + unstub r
+
+class MyFoldable t where
+  myFoldr :: (a -> b -> b) -> b -> t a -> b
+  myFoldr f z xs = getFunc (myFoldMap xs (EndoFunc . f)) z
+  myFoldl :: (b -> a -> b) -> b -> t a -> b
+  myFoldl f z xs = getFunc' (myFoldMap xs (EndoFuncFlip . flip f)) z
+  myFoldMap :: (MyMonoid b) => t a -> (a -> b) -> b
+  myConcatenate :: (MyMonoid a) => t a -> a
+  myConcatenate = myFoldl op zero
+
+instance MyFoldable [] where
+  myFoldMap = foldMapV
+
+data Tree a = Leaf a | Branch (Tree a) a (Tree a)
+instance MyFoldable Tree where
+  myFoldMap (Leaf x) f = f x
+  myFoldMap (Branch l x r) f = myFoldMap l f `op` f x `op` myFoldMap r f
+
+instance MyFoldable Maybe where
+  myFoldMap Nothing _ = zero
+  myFoldMap (Just x) f = f x
+
+toList :: (MyFoldable t) => t a -> [a]
+toList = myFoldr (:) []
