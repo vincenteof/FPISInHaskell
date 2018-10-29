@@ -2,8 +2,9 @@
 
 module Monoid.MyMonoid where
 
-import Testing.Gen
+import Testing.Gen hiding (union)
 import Data.List
+import qualified Data.Map as Map
 
 class MyMonoid m where
   op :: m -> m -> m
@@ -161,3 +162,24 @@ instance MyFoldable Maybe where
 
 toList :: (MyFoldable t) => t a -> [a]
 toList = myFoldr (:) []
+
+
+mergeValue :: (Ord k, MyMonoid v) => Map.Map k v -> Map.Map k v -> k -> v
+mergeValue mapL mapR key = 
+  let left = Map.findWithDefault zero key mapL
+      right = Map.findWithDefault zero key mapR
+  in left `op` right
+
+instance (Ord k, MyMonoid v) => MyMonoid (Map.Map k v) where
+  mapL `op` mapR =
+    let totalKeys =  union (Map.keys mapL) (Map.keys mapR)
+        op acc cur = Map.insert cur (mergeValue mapL mapR cur) acc
+    in foldl op zero totalKeys
+  zero = Map.empty
+
+
+newtype Func a b = Func { func :: a -> b}
+instance (MyMonoid b) => MyMonoid (Func a b) where
+  Func f `op` Func g = Func (\x -> f x `op` g x)
+  zero = Func (const zero)
+
