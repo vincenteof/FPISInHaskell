@@ -183,3 +183,13 @@ instance (MyMonoid b) => MyMonoid (Func a b) where
   Func f `op` Func g = Func (\x -> f x `op` g x)
   zero = Func (const zero)
 
+bag :: (Ord a) => [a] -> Map.Map a Int
+bag xs = foldMapV xs (\x -> Map.fromList [(x, 1)])
+
+newtype MyProduct a b = MyProduct { getTuple :: (a, b) }
+instance (MyMonoid a, MyMonoid b) => MyMonoid (MyProduct a b) where
+  MyProduct (la, lb) `op` MyProduct (ra, rb) = MyProduct (op la ra, op lb rb)
+  zero = MyProduct (zero, zero)
+
+lengthAndSum :: [Int] -> MyProduct Int Int
+lengthAndSum xs = foldMapV xs (\x -> MyProduct (1, x)) 
