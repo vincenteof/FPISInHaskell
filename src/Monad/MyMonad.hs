@@ -21,3 +21,50 @@ class MyMonad m where
   map2 :: m a -> m b -> (a -> b -> c) -> m c
   map2 ma mb f = flatMap ma (map' mb . f)
   
+
+instance MyMonad Maybe where
+  unit = Just
+  flatMap Nothing _ = Nothing
+  flatMap (Just x) f = f x
+
+instance MyMonad [] where
+  unit x = [x]
+  flatMap xs f = concatMap f xs
+
+
+-- mySequence for [] is just like multi-loop
+-- mySequence for Maybe will yield Nothing is one of the Maybe values are Nothing
+mySequence :: (MyMonad m) => [m a] -> m [a]
+mySequence = foldr (\mx mxs -> map2 mx mxs (:)) (unit []) 
+
+myTraverse :: (MyMonad m) => [a] -> (a -> m b) -> m [b] 
+myTraverse xs f = foldr (\x mxs -> map2 (f x) mxs (:)) (unit []) xs
+
+myReplicateM :: (MyMonad m) => Int -> m a -> m [a]
+myReplicateM n =  mySequence . replicate n
+
+myProduct :: (MyMonad m) => m a -> m b -> m (a, b)
+myProduct ma mb = map2 ma mb (\x y -> (x, y))
+
+-- m Bool is a monad whose content is Bool type
+myFilterM :: (MyMonad m) => [a] -> (a -> m Bool) -> m [a]
+myFilterM xs f =
+  foldr
+    (\x mxs ->
+       map2
+         (f x)
+         mxs
+         (\pred ys ->
+            if pred
+              then x : ys
+              else ys))
+    (unit [])
+    xs
+
+
+
+
+newtype MyState s a = MyState { run :: s -> (a, s) }
+
+
+
