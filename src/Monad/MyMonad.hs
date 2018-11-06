@@ -47,6 +47,9 @@ myProduct :: (MyMonad m) => m a -> m b -> m (a, b)
 myProduct ma mb = map2 ma mb (\x y -> (x, y))
 
 -- m Bool is a monad whose content is Bool type
+-- for Maybe, if any pred return Nothing, whole result is nothing, otherwise its behaviour is same as `filter`
+-- for [], it is like multi-loop, 
+-- if some elem return [True, False], the reusult will fork 2 branches, one contains the elem and the other not  
 myFilterM :: (MyMonad m) => [a] -> (a -> m Bool) -> m [a]
 myFilterM xs f =
   foldr
@@ -62,7 +65,8 @@ myFilterM xs f =
     xs
 
 
-
+compose :: (MyMonad m) => (a -> m b) -> (b -> m c) -> (a -> m c)
+compose f g x = f x `flatMap` g
 
 newtype MyState s a = MyState { run :: s -> (a, s) }
 
