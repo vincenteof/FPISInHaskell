@@ -64,9 +64,22 @@ myFilterM xs f =
     (unit [])
     xs
 
-
 compose :: (MyMonad m) => (a -> m b) -> (b -> m c) -> (a -> m c)
 compose f g x = f x `flatMap` g
+
+flatMapViaCompose :: (MyMonad m) => m a -> (a -> m b) -> m b
+flatMapViaCompose ma f = compose (const ma) f ()
+
+join :: (MyMonad m) => m (m a) -> m a
+join mma = mma `flatMap` id
+
+flatMapViaJoinAndMap :: (MyMonad m) => m a -> (a -> m b) -> m b
+flatMapViaJoinAndMap ma famb = join . flip map' famb $ ma 
+
+composeViaJoinAndMap :: (MyMonad m) => (a -> m b) -> (b -> m c) -> (a -> m c)
+composeViaJoinAndMap famb fbmc x = 
+  join . _map fbmc . join . _map famb $ unit x
+  where _map = flip map'
 
 newtype MyState s a = MyState { run :: s -> (a, s) }
 
