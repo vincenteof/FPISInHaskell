@@ -1,5 +1,7 @@
 module Monad.MyMonad where
 
+import Control.Monad
+
 class MyFunctor f where
   myMap :: f a -> (a -> b) -> f b
 
@@ -70,18 +72,60 @@ compose f g x = f x `flatMap` g
 flatMapViaCompose :: (MyMonad m) => m a -> (a -> m b) -> m b
 flatMapViaCompose ma f = compose (const ma) f ()
 
-join :: (MyMonad m) => m (m a) -> m a
-join mma = mma `flatMap` id
+join' :: (MyMonad m) => m (m a) -> m a
+join' mma = mma `flatMap` id
 
 flatMapViaJoinAndMap :: (MyMonad m) => m a -> (a -> m b) -> m b
-flatMapViaJoinAndMap ma famb = join . flip map' famb $ ma 
+flatMapViaJoinAndMap ma famb = join' . flip map' famb $ ma 
 
 composeViaJoinAndMap :: (MyMonad m) => (a -> m b) -> (b -> m c) -> (a -> m c)
 composeViaJoinAndMap famb fbmc x = 
-  join . _map fbmc . join . _map famb $ unit x
+  join' . _map fbmc . join' . _map famb $ unit x
   where _map = flip map'
 
-newtype MyState s a = MyState { run :: s -> (a, s) }
+newtype Id a = Id { value :: a }
+instance MyMonad Id where
+  unit = Id
+  (Id x) `flatMap` f = f x
 
 
+newtype MyState s a = MyState { myRun :: s -> (a, s) }
+
+instance Functor (MyState s) where
+  fmap = liftM
+
+instance Applicative (MyState s) where
+  pure = return
+  (<*>) = ap
+
+-- Here we use official `Monad` class, 
+-- because we want to use `do` syntax for monad instead of nested function applications
+instance Monad (MyState s) where
+  return x = MyState (\s -> (x, s))
+  MyState runF >>= f = MyState (\s -> 
+    let (x, newS) = runF s
+        MyState newRunF = f x
+    in newRunF newS)
+
+getState :: MyState s s
+getState = MyState (\s -> (s, s))
+
+setState :: s -> MyState s ()
+setState newS = MyState $ const ((), newS)
+
+state1 = MyState $ \s -> (s * 2, s + 2) :: (Int, Int)
+state2 = MyState $ \s -> (s * 2, s + 3) :: (Int, Int) 
+
+
+zipWithIndex :: [a] -> [(Int, a)]
+zipWithIndex xs = 
+  let f acc a = (do
+        ysAcc <- acc
+        n <- getState
+        _ <- setState (n + 1)
+        return ((n, a):ysAcc))
+      z = return []
+      stateF = foldl f z xs
+      result = myRun stateF 0
+  in reverse . fst $ result
 
