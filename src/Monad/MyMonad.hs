@@ -129,3 +129,20 @@ zipWithIndex xs =
       result = myRun stateF 0
   in reverse . fst $ result
 
+
+-- The context of MyReader is that we can treat it as if it has already be applied and get the result
+-- `sequence` returns another reader which returns an array of the result of each reader applied to the argument
+-- `join` flatten a reader, and argument to it become both part of the inner function and the argument
+-- `replicateM` is almost the same as `sequence` 
+newtype MyReader r a = MyReader { runReader :: r -> a }
+instance Monad (MyReader r) where
+  return x = MyReader $ const x
+  -- MyReader readerF >>= f = MyReader (\x -> runReader (f (readerF x)) x)
+  MyReader readerF >>= f = MyReader (\x -> (runReader . f . readerF) x x)
+
+instance Functor (MyReader r) where
+  fmap = liftM
+  
+instance Applicative (MyReader r) where
+  pure = return
+  (<*>) = ap
